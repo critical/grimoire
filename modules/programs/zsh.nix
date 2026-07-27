@@ -20,8 +20,10 @@
     );
 
   historySetOptions =
-    lib.optional cfg.history.ignoreAllDups "hist_ignore_all_dups"
+    lib.optional cfg.history.ignoreDups "hist_ignore_dups"
+    ++ lib.optional cfg.history.ignoreAllDups "hist_ignore_all_dups"
     ++ lib.optional cfg.history.ignoreSpace "hist_ignore_space"
+    ++ lib.optional cfg.history.share "share_history"
     ++ lib.optional cfg.history.extended "extended_history"
     ++ lib.optional cfg.history.expireDupsFirst "hist_expire_dups_first"
     ++ lib.optional cfg.history.findNoDups "hist_find_no_dups"
@@ -30,6 +32,15 @@
   historyUnsetOptions =
     lib.optional (!cfg.history.ignoreDups) "hist_ignore_dups"
     ++ lib.optional (!cfg.history.share) "share_history";
+
+  # compinit -C trusts the existing dump and never rescans fpath. Since fpath
+  # entries are immutable store paths that change on every rebuild, key the dump
+  # filename to their hash: a completion change yields a new filename (fresh
+  # scan), while an unchanged config keeps the -C fast path.
+  completionPaths = lib.concatMap (p: p.completions) (lib.attrValues cfg.plugins);
+  compdumpTag = builtins.substring 0 12 (
+    builtins.hashString "sha256" (lib.concatMapStringsSep ":" toString completionPaths)
+  );
 
   pluginsConfig = lib.concatStringsSep "\n\n" (
     lib.filter (s: s != "") (
@@ -80,7 +91,10 @@
         lib.concatStringsSep "\n" (
           lib.filter (s: s != "") [
             "autoload -Uz compinit"
-            "compinit -C"
+            ''
+              _zcompdump="''${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump-''${ZSH_VERSION}-${compdumpTag}"
+              [[ -d "''${_zcompdump:h}" ]] || mkdir -p "''${_zcompdump:h}"
+              compinit -C -d "$_zcompdump"''
             (lib.optionalString cfg.completion.caseInsensitive
               "zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'")
             (lib.optionalString cfg.completion.menuSelect

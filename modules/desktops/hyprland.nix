@@ -8,9 +8,10 @@
 
   luaString = s: builtins.toJSON s;
 
-  envContent = lib.optionalString (cfg.env.variables != {}) (
+  envContent = lib.optionalString (cfg.env.variables != {} || cfg.env.dbusVariables != {}) (
     lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: value: "hl.env(${luaString name}, ${luaString value})") cfg.env.variables
+      ++ lib.mapAttrsToList (name: value: "hl.env(${luaString name}, ${luaString value}, true)") cfg.env.dbusVariables
     )
   );
 
@@ -115,6 +116,23 @@ in {
       };
       description = ''
         Environment variables to set via `hl.env(name, value)` calls.
+      '';
+    };
+
+    env.dbusVariables = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      example = {
+        XCURSOR_SIZE = "24";
+      };
+      description = ''
+        Like {option}`env.variables`, but also exported to the systemd and D-Bus
+        activation environment via the third `dbus` argument of `hl.env`, so
+        D-Bus-activated services (xdg-desktop-portal and friends) see them.
+
+        Hyprland already exports a fixed set (WAYLAND_DISPLAY, XDG_CURRENT_DESKTOP,
+        QT_QPA_PLATFORMTHEME, PATH, ...) on its own; use this only for variables
+        outside that set, such as cursor theme variables.
       '';
     };
 
